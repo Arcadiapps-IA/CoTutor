@@ -49,3 +49,23 @@ def test_get_courses_service(mock_post):
     client = MoodleClient(base_url="https://moodle.test", token="tok")
     res = services.get_courses(client)
     assert "courses" in res
+
+
+@patch("requests.post")
+def test_authenticate_with_credentials_success(mock_post):
+    mock_post.return_value = _fake_response({"token": "usertok"})
+    client = MoodleClient(base_url="https://moodle.test")
+    token = client.authenticate_with_credentials("u", "p", service="moodle_mobile_app")
+    assert token == "usertok"
+    assert client.token == "usertok"
+
+
+@patch("requests.post")
+def test_authenticate_with_credentials_failure(mock_post):
+    mock_post.return_value = _fake_response({"error": "Invalid login"}, status_code=200)
+    client = MoodleClient(base_url="https://moodle.test")
+    try:
+        client.authenticate_with_credentials("u", "wrong", service="moodle_mobile_app")
+        assert False, "Expected MoodleAPIError"
+    except MoodleAPIError:
+        pass
