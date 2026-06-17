@@ -1,0 +1,7 @@
+# Ejemplo de configuración para integracion con Moodle
+
+# MOODLE_URL: URL base de Moodle (p. ej. https://moodle.example.org o http://192.168.0.10)
+MOODLE_URL: "https://moodle.example.org"
+
+# MOODLE_TOKEN: token de servicio (no lo guardes en el repo)
+MOODLE_TOKEN: "REPLACE_WITH_YOUR_TOKEN"
