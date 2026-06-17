@@ -14,6 +14,7 @@ Archivos añadidos
 - co_tutor/moodle/.moodle_config.json: (NO committed) ejemplo de fichero de configuración local (se crea al conectar)
 - co_tutor/moodle/api.py: Flask blueprint que expone endpoints para conectar/consultar/desconectar
 - co_tutor/moodle/config_store.py: helpers para persistir la configuración localmente
+- co_tutor/moodle/cli.py: CLI interactivo para pedir URL/usuario/contraseña y guardar config localmente
 - tests/test_moodle_client.py: pruebas unitarias básicas (mocked)
 
 Instalación
@@ -23,33 +24,56 @@ Instalación
 2) Opcional: copia co_tutor/moodle/.env.example a co_tutor/moodle/.env y rellena
    las variables (NO subir .env al repositorio).
 
-Endpoints HTTP
-Este paquete incluye una Flask Blueprint que expone tres endpoints bajo /moodle:
+Configuración y autenticación
+Hay dos modos de autenticación soportados:
 
-- POST /moodle/connect
-  Body JSON: {"base_url": "https://moodle.example.org", "username": "user", "password": "pass", "service": "moodle_mobile_app"}
-  Acción: obtiene un token con las credenciales y guarda (en local) base_url, username y token. NOTA: guarda el token en un fichero local que está gitignored.
+1) Token de servicio (recomendado para integraciones servidor-servidor)
+   - Crea o usa un token de servicio en Moodle con los permisos necesarios y
+     colócalo en la variable de entorno MOODLE_TOKEN o en .env.
+   - El cliente leerá MOODLE_URL y MOODLE_TOKEN automáticamente.
 
-- GET /moodle/config
-  Devuelve la configuración guardada (ocultando parcialmente el token).
+2) Usuario y contraseña (autenticación en nombre del usuario)
+   - La aplicación puede pedir al usuario su URL de Moodle, usuario y
+     contraseña y luego llamar a MoodleClient.authenticate_with_credentials(username, password, service="moodle_mobile_app")
+   - Esto intenta obtener un token mediante /login/token.php para el service
+     especificado (por defecto 'moodle_mobile_app'). El token resultante se usa
+     para las llamadas posteriores y tendrá los mismos permisos que el usuario.
+   - Nota: el servicio indicado (por ejemplo 'moodle_mobile_app') debe estar
+     habilitado en la instancia de Moodle y permitir creación de tokens.
 
-- POST /moodle/disconnect
-  Elimina la configuración local guardada.
+Uso básico
+from co_tutor.moodle import MoodleClient, get_courses
+client = MoodleClient()  # lee MOODLE_URL y MOODLE_TOKEN / .env
+# O autenticar con credenciales de usuario:
+# client = MoodleClient(base_url="https://moodle.example.org")
+# client.authenticate_with_credentials(username, password)
+courses = get_courses(client)
 
-Integración en tu aplicación web (Flask)
-Registra la blueprint en tu Flask app:
+CLI interactivo
+Puedes usar la utilidad de línea de comandos incluida para solicitar la URL,
+usuario y contraseña de forma interactiva y guardar la configuración localmente:
 
-from flask import Flask
-from co_tutor.moodle.api import bp as moodle_bp
+Ejecutar directamente como módulo:
 
-app = Flask(__name__)
-app.register_blueprint(moodle_bp)
+  python -m co_tutor.moodle.cli
 
-Consideraciones de seguridad
-- Estos endpoints manejan credenciales; protege el acceso a ellos mediante autenticación/autorization en tu app y utiliza HTTPS.
-- El token se almacena localmente en co_tutor/moodle/.moodle_config.json y el fichero está incluido en .gitignore para evitar subirlo al repositorio.
-- Para despliegues/CI, prefiere GitHub Secrets y tokens de servicio en lugar de almacenar credenciales de usuarios.
+Argumentos opcionales:
+  --base-url URL     Moodle base URL
+  --username USER    Usuario
+  --service SERVICE  Service shortname (por defecto: moodle_mobile_app)
+  --no-save-username No guardar el username en la configuración local
 
-Siguientes pasos
-- Integrar protección (auth) para los endpoints en la app principal.
-- Añadir tests para la blueprint (usar pytest + flask test client y mocking de MoodleClient).
+El comando solicitará la contraseña por prompt de forma segura y almacenará el
+base_url y el token devuelto en co_tutor/moodle/.moodle_config.json (git-ignored).
+
+Seguridad
+- Nunca guardes credenciales o tokens en el repositorio.
+- Para CI/producción utiliza GitHub Secrets (MOODLE_TOKEN, MOODLE_URL) o un
+  sistema de gestión de secretos.
+
+Limitaciones y futuras mejoras
+- Manejo de paginación y grandes volúmenes de datos.
+- Soporte para subir envíos (mod_assign_submit_for_marking o similar) y para
+  sincronización de usuarios/inscripciones.
+- Validación y modelos (pydantic) para respuestas de Moodle.
+- Integración con pruebas de integración en un entorno acceso-restricted.
